@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from strucs import LeafNode, Node, CTaoTree
 
 # generate synthetic data for classification
-np.random.seed(0)
+np.random.seed(42)
 
 # N: number of data points
 # D: dimension of data points
@@ -13,7 +13,7 @@ np.random.seed(0)
 
 N = 1000
 D = 2
-K = 3
+K = 5
 
 X = np.random.randn(N, D)
 
@@ -50,7 +50,7 @@ print(f"Tree accuracy: {tree.accuracy(X, y)}")
 iters = 3
 
 total_plots = iters + 2
-colors = ['r', 'g', 'b']
+colors = ['r', 'g', 'b', 'y', 'm']
 cols = min(10, total_plots)
 rows = (total_plots + 9) // 10
 
