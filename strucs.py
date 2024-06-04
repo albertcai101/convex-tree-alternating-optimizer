@@ -1,8 +1,5 @@
 import numpy as np
 import cvxpy as cp
-from dask import delayed, compute, visualize
-from dask.graph_manipulation import bind
-import time
 
 # D: dimension of data points
 # K: number of classes
@@ -153,18 +150,9 @@ class CTaoTree:
     
     def __reach_node(self, x, node):
         current_node = self.root
-        if current_node == node:
-            return True
-
-        while not current_node.is_leaf:
-            if current_node == node:
-                return True
+        while not current_node.is_leaf and current_node != node:
             decision = np.dot(x, current_node.w) + current_node.b
-            if decision > 0:
-                current_node = current_node.left
-            else:
-                current_node = current_node.right
-
+            current_node = current_node.left if decision > 0 else current_node.right
         return current_node == node
 
     # def train_iter(self, X, y):
@@ -186,15 +174,15 @@ class CTaoTree:
     #     # Node training itself is also a delayed task
     #     return bind(delayed(self.train_node), [left_task, right_task])(X, y, node)
 
-    def train_tree_layer(self, nodes, X, y):
-        tasks = [delayed(self.train_node)(X, y, node) for node in nodes]
-        return compute(*tasks)
+    def train_nodes_parallel(self, nodes, X, y):
+        for node in nodes:
+            self.train_node(X, y, node)
 
     def train_iter(self, X, y):
         # Nodes at the same depth can be processed in parallel
         for depth in reversed(range(self.depth)):
             nodes_at_depth = self.__get_nodes_at_depth(depth)
-            self.train_tree_layer(nodes_at_depth, X, y)
+            self.train_nodes_parallel(nodes_at_depth, X, y)
     
     def __get_nodes_at_depth(self, depth):
         return self.__get_subnodes_at_depth(self.root, depth)
