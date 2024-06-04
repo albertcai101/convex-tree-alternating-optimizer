@@ -1,7 +1,8 @@
 import numpy as np
 import cvxpy as cp
-from dask import delayed, compute
+from dask import delayed, compute, visualize
 from dask.graph_manipulation import bind
+import time
 
 # D: dimension of data points
 # K: number of classes
@@ -166,18 +167,45 @@ class CTaoTree:
 
         return current_node == node
 
-    def train_iter(self, X, y):
-        self.__train_iter_recursive(X, y, self.root)
+    # def train_iter(self, X, y):
+    #     # Start the recursive training, wrapping the root node training in delayed
+    #     result = self.__train_iter_recursive(X, y, self.root)
+    #     # Compute the final result to trigger execution
+    #     result.compute()
 
-    def __train_iter_recursive(self, X, y, node):
-        if node.is_leaf:
-            self.train_node(X, y, node)
-            return
+    # def __train_iter_recursive(self, X, y, node):
+    #     if node.is_leaf:
+    #         # Train leaf node, delay the execution
+    #         return delayed(self.train_node)(X, y, node)
         
-        self.__train_iter_recursive(X, y, node.left)
-        self.__train_iter_recursive(X, y, node.right)
+    #     # Recursively train left and right children, delaying their execution
+    #     left_task = self.__train_iter_recursive(X, y, node.left)
+    #     right_task = self.__train_iter_recursive(X, y, node.right)
 
-        self.train_node(X, y, node)
+    #     # Bind parent node training to occur after both children are trained
+    #     # Node training itself is also a delayed task
+    #     return bind(delayed(self.train_node), [left_task, right_task])(X, y, node)
+
+    def train_tree_layer(self, nodes, X, y):
+        tasks = [delayed(self.train_node)(X, y, node) for node in nodes]
+        return compute(*tasks)
+
+    def train_iter(self, X, y):
+        # Nodes at the same depth can be processed in parallel
+        for depth in reversed(range(self.depth)):
+            nodes_at_depth = self.__get_nodes_at_depth(depth)
+            self.train_tree_layer(nodes_at_depth, X, y)
+    
+    def __get_nodes_at_depth(self, depth):
+        return self.__get_subnodes_at_depth(self.root, depth)
+
+    def __get_subnodes_at_depth(self, node, depth):
+        # Helper method to retrieve all nodes at a specified depth
+        if node is None:
+            return []
+        if node.depth == depth:
+            return [node]
+        return self.__get_subnodes_at_depth(node.left, depth) + self.__get_subnodes_at_depth(node.right, depth)
 
     def __prune(self, X, y):
         # dead branches
