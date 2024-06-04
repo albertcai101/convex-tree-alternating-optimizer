@@ -39,7 +39,7 @@ y = np.argmax(np.maximum.reduce(outputs), axis=1)
 
 # Use TAO to solve the optimization problem
 # first create a random tree structure
-depth = 5
+depth = 10
 
 # non leaf nodes have w and b (w is a D x 1 vector, b is a scalar)
 # leaf nodes is simply 0, ..., K-1

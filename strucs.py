@@ -1,43 +1,82 @@
 import numpy as np
 import cvxpy as cp
+from dask import delayed, compute, visualize
 
 # D: dimension of data points
 # K: number of classes
 
 class Node:
-    def __init__(self, depth, D, K, is_leaf=False):
+    def __init__(self, depth, D, K,
+                 parent, left, right,):
         self.depth = depth
-        self.is_leaf = is_leaf
-        if not is_leaf:
-            self.w = np.random.randn(D, 1)  # Weight vector for the node
-            self.b = np.random.randn(1)     # Bias for the node
-            self.left = None
-            self.right = None
-        else:
-            self.label = np.random.randint(0, K)  # Class label for leaf node
+        self.D = D
+        self.K = K
+        self.parent = parent
+        self.left = left
+        self.right = right
 
     def set_children(self, left, right):
         self.left = left
         self.right = right
 
+    def set_parent(self, node):
+        self.parent = node
+
+class StandardNode(Node):
+    def __init__(self, depth, D, K,
+                 parent, left, right,
+                 w, b,):
+        super().__init__(depth, D, K, parent, left, right)
+        self.w = w
+        self.b = b
+
+    @property
+    def is_leaf(self):
+        return False
+    
+    def copy(self):
+        return StandardNode(self.depth, self.D, self.K, 
+                            self.parent, self.left, self.right, 
+                            self.w, self.b)
+
 class LeafNode(Node):
-    def __init__(self, depth, D, K):
-        super().__init__(depth, D, K, is_leaf=True)
+    def __init__(self, depth, D, K, 
+                 parent,
+                 label,):
+        super().__init__(depth=depth, D=D, K=K, parent=parent, left=None, right=None)
+        self.label = label
+
+    @property
+    def is_leaf(self):
+        return True
+    
+    def copy(self):
+        return LeafNode(self.depth, self.D, self.K, 
+                        self.parent,
+                        self.label)
 
 class CTaoTree:
     def __init__(self, depth, D, K):
         self.depth = depth
         self.D = D
         self.K = K
-        self.root = self.build_tree(0, depth, D, K)
+        self.root = self.build_random_tree(depth=0, max_depth=depth, D=D, K=K, parent=None)
         
-    def build_tree(self, current_depth, max_depth, D, K):
-        if current_depth == max_depth:
-            return LeafNode(current_depth, D, K)
+    def build_random_tree(self, depth, max_depth, D, K, parent):
+        if depth == max_depth:
+            return LeafNode(depth=depth, D=D, K=K, 
+                            parent=parent,
+                            label=np.random.randint(0, K))
         else:
-            node = Node(current_depth, D, K)
-            node.set_children(self.build_tree(current_depth + 1, max_depth, D, K),
-                              self.build_tree(current_depth + 1, max_depth, D, K))
+            w = np.random.randn(D)
+            b = np.random.randn()
+            left = self.build_random_tree(depth+1, max_depth, D, K, parent=None)
+            right = self.build_random_tree(depth+1, max_depth, D, K, parent=None)
+            node = StandardNode(depth=depth, D=D, K=K, 
+                                parent=parent, left=left, right=right, 
+                                w=w, b=b)
+            left.set_parent(node)
+            right.set_parent(node)
             return node
     
     def evaluate(self, x, node=None):
@@ -60,11 +99,8 @@ class CTaoTree:
         y_pred = self.batch_eval(X)
         return np.mean(y_pred == y)
             
-    def train_node(self, X, y, node=None):
+    def train_node(self, X, y, node):
         # print(f"Training node at depth {node.depth}")
-
-        if node is None:
-            node = self.root
 
         if node.is_leaf:
             # if node is leaf, update the label to the most frequent class
@@ -87,11 +123,17 @@ class CTaoTree:
             # set the label to the most frequent class
             y_S = y[S]
             unique, counts = np.unique(y_S, return_counts=True)
-            node.label = unique[np.argmax(counts)]
+
+            new_label = unique[np.argmax(counts)]
+
+            new_node = node.copy()
+            new_node.label = new_label
+            return new_node
 
             # print(f"Trained leaf node at depth {node.depth} to label {node.label}")
         else:
             # if node is not leaf, find the best split
+            # print(f"Now training non-leaf node at depth {node.depth}")
 
             # find subset S of data points that reach node using reach_node
             S = []
@@ -140,13 +182,22 @@ class CTaoTree:
 
             loss = cp.sum(cp.pos(1 - cp.multiply(y_C, X_C @ w + b))) / N_C
             prob = cp.Problem(cp.Minimize(loss))
-            prob.solve()
+
+            def solve_passthrough(prob):
+                return prob.solve()
+
+            delayed(solve_passthrough)(prob)
 
 
-            node.w = w.value
-            node.b = b.value
+            new_w = w.value
+            new_b = b.value
 
-            # print(f"Trained node at depth {node.depth} to w {node.w.flatten()} and b {node.b}")
+            new_node = node.copy()
+            new_node.w = new_w
+            new_node.b = new_b
+            return new_node
+
+            # print(f"Trained non-leaf node at depth {node.depth} to w {node.w.flatten()} and b {node.b}")
     
     def __reach_node(self, x, node):
         current_node = self.root
@@ -155,32 +206,27 @@ class CTaoTree:
             current_node = current_node.left if decision > 0 else current_node.right
         return current_node == node
 
-    # def train_iter(self, X, y):
-    #     # Start the recursive training, wrapping the root node training in delayed
-    #     result = self.__train_iter_recursive(X, y, self.root)
-    #     # Compute the final result to trigger execution
-    #     result.compute()
-
-    # def __train_iter_recursive(self, X, y, node):
-    #     if node.is_leaf:
-    #         # Train leaf node, delay the execution
-    #         return delayed(self.train_node)(X, y, node)
-        
-    #     # Recursively train left and right children, delaying their execution
-    #     left_task = self.__train_iter_recursive(X, y, node.left)
-    #     right_task = self.__train_iter_recursive(X, y, node.right)
-
-    #     # Bind parent node training to occur after both children are trained
-    #     # Node training itself is also a delayed task
-    #     return bind(delayed(self.train_node), [left_task, right_task])(X, y, node)
-
     def train_nodes_parallel(self, nodes, X, y):
-        for node in nodes:
-            self.train_node(X, y, node)
+        print(f"Training {len(nodes)} nodes in parallel")
+        new_nodes = [self.train_node(X, y, node) for node in nodes]
+        new_nodes = compute(*new_nodes)
+
+        for node, new_node in zip(nodes, new_nodes):
+            if new_node is not None:
+                self.replace_node(node, new_node)
+
+    def replace_node(self, node, new_node):
+        if node.parent is None:
+            self.root = new_node
+        elif node.parent.left == node:
+            node.parent.left = new_node
+        else:
+            node.parent.right = new_node
+        new_node.set_parent(node.parent)
 
     def train_iter(self, X, y):
         # Nodes at the same depth can be processed in parallel
-        for depth in reversed(range(self.depth)):
+        for depth in reversed(range(self.depth+1)):
             nodes_at_depth = self.__get_nodes_at_depth(depth)
             self.train_nodes_parallel(nodes_at_depth, X, y)
     
@@ -205,10 +251,23 @@ class CTaoTree:
         
     def print_tree(self, node, level=0):
         if node is not None:
-            print(' ' * 4 * level + f"Depth {node.depth}: {'Leaf' if node.is_leaf else 'Node'}")
+            description = ' ' * 4 * level + f"Depth {node.depth}: {'Leaf' if node.is_leaf else 'Node'}"
             if not node.is_leaf:
-                print(' ' * 4 * level + f"w: {node.w.flatten()}, b: {node.b}")
+                print(description + f" | w: {node.w.flatten()}, b: {node.b}")
                 self.print_tree(node.left, level + 1)  # Recursively print left child
                 self.print_tree(node.right, level + 1)  # Recursively print right child
             else:
-                print(' ' * 4 * level + f"Class Label: {node.label}")
+                print(description + f" | label: {node.label}")
+
+
+
+if __name__ == "__main__":
+    print("Testing CTaoTree")
+
+    np.random.seed(0)
+    depth = 2
+    D = 2
+    K = 3
+
+    tree = CTaoTree(depth, D, K)
+    tree.print_tree(tree.root)
