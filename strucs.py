@@ -1,6 +1,7 @@
 import numpy as np
 import cvxpy as cp
-import dask
+from dask import delayed, compute
+from dask.graph_manipulation import bind
 
 # D: dimension of data points
 # K: number of classes
@@ -78,7 +79,7 @@ class CTaoTree:
             N = X.shape[0]
             for n in range(N):
                 x = X[n]
-                if self.reach_node(x, node):
+                if self.__reach_node(x, node):
                     S.append(n)
             
             if len(S) == 0:
@@ -99,7 +100,7 @@ class CTaoTree:
             N = X.shape[0]
             for n in range(N):
                 x = X[n]
-                if self.reach_node(x, node):
+                if self.__reach_node(x, node):
                     S.append(n)
 
             # print(f"Reached {len(S)} data points at depth {node.depth}")
@@ -149,7 +150,7 @@ class CTaoTree:
 
             # print(f"Trained node at depth {node.depth} to w {node.w.flatten()} and b {node.b}")
     
-    def reach_node(self, x, node):
+    def __reach_node(self, x, node):
         current_node = self.root
         if current_node == node:
             return True
@@ -178,7 +179,7 @@ class CTaoTree:
 
         self.train_node(X, y, node)
 
-    def prune(self, X, y):
+    def __prune(self, X, y):
         # dead branches
         # nodes with children that recieve no training points, replace with the other child
 
