@@ -18,19 +18,19 @@ class CTao():
         self.tree = CTaoTree(self.depth, self.d, self.k)
         self.memory = []
 
-        self.cluster = LocalCluster(n_workers=4, threads_per_worker=2)  # Adjust these numbers based on your machine's cores and threads
-        # cluster = LocalCluster(resources={'CPU': 1})
-        self.client = Client(self.cluster)
+        # self.cluster = LocalCluster(n_workers=4, threads_per_worker=2)  # Adjust these numbers based on your machine's cores and threads
+        # # cluster = LocalCluster(resources={'CPU': 1})
+        # self.client = Client(self.cluster)
     
     ''' Mutable Functinon that changes self.tree'''
     def fit(self, X, y):
         self.memory = []
         self.memory.append((self.tree, self.accuracy(X, y)))
-        self.tree.print_tree(self.tree.root)
+        # self.tree.print_tree(self.tree.root)
 
         for i in range(self.iters):
             self.__train_tree(X, y)
-            self.tree.print_tree(self.tree.root)
+            # self.tree.print_tree(self.tree.root)
             self.memory.append((self.tree, self.accuracy(X, y)))
 
         pass
@@ -89,7 +89,7 @@ class CTao():
 
 
 if __name__ == "__main__":
-    ct = CTao(DEPTH=2, D=2, K=5)
+    ct = CTao(DEPTH=10, D=2, K=5)
 
     # generate synthetic data for classification
     N = 1000
