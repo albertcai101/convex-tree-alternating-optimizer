@@ -2,7 +2,7 @@ import numpy as np
 import cvxpy as cp
 import matplotlib.pyplot as plt
 
-from strucs import LeafNode, Node, CTaoTree
+from cTaoTree import CTaoTree
 
 # generate synthetic data for classification
 np.random.seed(42)
