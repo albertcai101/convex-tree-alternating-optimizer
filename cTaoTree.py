@@ -29,6 +29,25 @@ class CTaoTree:
             left.set_parent(node)
             right.set_parent(node)
             return node
+        
+    def copy_tree(self, node):
+        if isinstance(node, LeafNode):
+            return LeafNode(depth=node.depth, D=node.D, K=node.K, 
+                            parent=None, label=node.label)
+        elif isinstance(node, StandardNode):
+            left_copy = self.copy_tree(node.left)
+            right_copy = self.copy_tree(node.right)
+            node_copy = StandardNode(depth=node.depth, D=node.D, K=node.K,
+                                     parent=None, left=left_copy, right=right_copy,
+                                     w=node.w.copy(), b=node.b)
+            left_copy.set_parent(node_copy)
+            right_copy.set_parent(node_copy)
+            return node_copy
+
+    def copy(self):
+        new_tree = CTaoTree(self.depth, self.D, self.K)
+        new_tree.root = self.copy_tree(self.root)
+        return new_tree
     
     def evaluate(self, x, node=None):
         if node is None:
@@ -204,11 +223,11 @@ class CTaoTree:
         if node is not None:
             description = ' ' * 4 * level + f"Depth {node.depth}: {'Leaf' if node.is_leaf else 'Node'}"
             if not node.is_leaf:
-                print(description + f" | w: {node.w.flatten()}, b: {node.b}")
+                print(description + f" | w: {node.w.flatten()}, b: {node.b}, id: {id(node)}, parent: {id(node.parent)}")
                 self.print_tree(node.left, level + 1)  # Recursively print left child
                 self.print_tree(node.right, level + 1)  # Recursively print right child
             else:
-                print(description + f" | label: {node.label}")
+                print(description + f" | label: {node.label}, id: {id(node)}, parent: {id(node.parent)}")
 
 
 
@@ -222,3 +241,6 @@ if __name__ == "__main__":
 
     tree = CTaoTree(depth, D, K)
     tree.print_tree(tree.root)
+
+    new_tree = tree.copy()
+    new_tree.print_tree(new_tree.root)
