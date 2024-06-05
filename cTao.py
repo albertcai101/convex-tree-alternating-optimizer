@@ -8,6 +8,65 @@ import matplotlib.pyplot as plt
 # D: dimension of data points
 # K: number of classes
 
+def eval(x, node):
+    if node.is_leaf:
+        return node.label, node
+    else:
+        decision = np.dot(x, node.w) + node.b
+        if decision > 0:
+            return eval(x, node.left)
+        else:
+            return eval(x, node.right)
+
+def reach_node(x, root, node):
+    current_node = root
+    while not current_node.is_leaf and current_node != node:
+        decision = np.dot(x, current_node.w) + current_node.b
+        current_node = current_node.left if decision > 0 else current_node.right
+    return current_node == node
+
+
+def find_training_data(X, y, root, node):
+    S = []
+    N = X.shape[0]
+
+    # subsamble 1000 data points
+    if N > 1000:
+        subsample = np.random.choice(N, 1000, replace=False)
+        X = X[subsample]
+        y = y[subsample]
+        N = X.shape[0]
+
+    for n in range(N):
+        x = X[n]
+        if reach_node(x, root, node):
+            S.append(n)
+    
+    if len(S) == 0:
+        return (node.is_leaf, None)
+
+    if node.is_leaf:
+        return (node.is_leaf, y[S])
+    else:
+        C = []
+        y_bar = []
+        for n in S:
+            x = X[n]
+            y_n = y[n]
+            left_label = eval(x, node.left)[0]
+            right_label = eval(x, node.right)[0]
+
+            if left_label == y_n and right_label == y_n:
+                continue
+
+            if left_label != y_n and right_label != y_n:
+                continue
+
+            C.append(n)
+            y_bar.append(1 if left_label == y_n else -1)
+
+        return (node.is_leaf, (X[C], y_bar))
+
 def train_node(is_leaf, train_data):
     if train_data is None:
         return None
@@ -36,7 +95,7 @@ def train_non_leaf_node(X_C, y_bar):
 
     loss = cp.sum(cp.pos(1 - cp.multiply(y_bar, X_C @ w + b))) / N_C
     prob = cp.Problem(cp.Minimize(loss))
-    prob.solve()
+    prob.solve(solver=cp.ECOS)
 
     w = w.value
     b = b.value
@@ -58,8 +117,31 @@ class CTao():
         self.memory = []
         self.memory.append((self.tree, self.accuracy(X, y)))
 
+        N = X.shape[0]
+        shuffle = np.random.permutation(N)
+        breakpoints = np.linspace(0, N, self.iters).astype(int)
+        breakpoints = breakpoints[1:]
+
+        # append N-1 to the end
+        # breakpoints = np.append(breakpoints, N)
+        # TODO: this does not give desired results, need to append to X_batches
+
+        print(breakpoints)
+        # [ 605 1210]
+        X_batches = np.split(X[shuffle], breakpoints)
+        y_batches = np.split(y[shuffle], breakpoints)
+
+        # X_batches = np.append(X_batches, X)
+        # y_batches = np.append(y_batches, y)
+
         for i in range(self.iters):
-            self.__train_tree(X, y)
+            print(f"----Training iteration {i+1}----")
+            start_time = time.time()
+            print(f"Training on {len(X_batches[i])} data points")
+            self.__train_tree(X_batches[i], y_batches[i])
+            end_time = time.time()
+            print(f"Accuracy: {self.accuracy(X, y)}")
+            print(f"Time taken: {end_time - start_time} seconds")
             self.memory.append((self.tree, self.accuracy(X, y)))
 
     def eval(self, x, node=None):
@@ -82,7 +164,7 @@ class CTao():
         y_pred = self.batch_eval(X)
         return np.mean(y_pred == y)
 
-    def plot_training(self):
+    def plot_training(self, X, y):
         # use memory to plot
         total_plots = self.iters + 2
         colors = ['r', 'g', 'b', 'y', 'm']
@@ -110,60 +192,38 @@ class CTao():
         pass
 
     ''' Can change global tree'''
-    def __train_nodes_parallel(self, X, y, nodes):
-        print(f"Training {len(nodes)} nodes in parallel...")
+    def __train_nodes_parallel(self, X, y, nodes, verbose=False):
 
-        print("first, finding necessary data")
+        X_sub = X
+        y_sub = y
+
+        N = X.shape[0]
+        # # subsamble 1000 data points
+        # if N > 2000:
+        #     subsample = np.random.choice(N, 1000, replace=False)
+        #     X_sub = X[subsample]
+        #     y_sub = y[subsample]
+        #     N = X_sub.shape[0]
+
+        if verbose:
+            print(f"Training {len(nodes)} nodes in parallel...")
+            print("first, finding necessary data")
+
         start_time = time.time()
-        train_data = []
-        for node in nodes:
-            # find all elements that reach node
-            S = []
-            N = X.shape[0]
-
-            for n in range(N):
-                x = X[n]
-                if self.__reach_node(x, node):
-                    S.append(n)
-            
-            if len(S) == 0:
-                train_data.append((node.is_leaf, None))
-                continue
-
-            if node.is_leaf:
-                train_data.append((node.is_leaf, y[S]))
-            else:
-                # find subset C of S that we care: changing left or right will change the label
-                C = []
-                y_bar = []
-                for n in S:
-                    x = X[n]
-                    y_n = y[n]
-                    left_label = self.eval(x, node.left)[0]
-                    right_label = self.eval(x, node.right)[0]
-
-                    # if both are correct, we don't care
-                    if left_label == y_n and right_label == y_n:
-                        continue
-
-                    # if both are wrong, we don't care
-                    if left_label != y_n and right_label != y_n:
-                        continue
-
-                    # if one is correct and the other is wrong, we care
-                    C.append(n)
-                    y_bar.append(1 if left_label == y_n else -1)
-
-                train_data.append((node.is_leaf, (X[C], y_bar)))
+        with Pool() as pool:
+            train_data = pool.starmap(find_training_data, [(X_sub, y_sub, self.tree.root, node) for node in nodes])
         end_time = time.time()
-        print(f"Train Data Computation Time taken: {end_time - start_time} seconds")
+
+        if verbose:
+            print(f"Train Data Computation Time taken: {end_time - start_time} seconds")
         
         start_time = time.time()
         with Pool() as pool:
             result_data = pool.starmap(train_node, train_data)
         end_time = time.time()
 
-        print(f"Actual Traning Time taken: {end_time - start_time} seconds")
+        if verbose:
+            print(f"Actual Traning Time taken: {end_time - start_time} seconds")
 
         for i, node in enumerate(nodes):
             if result_data[i] is None:
@@ -173,8 +233,9 @@ class CTao():
             else:
                 node.w, node.b = result_data[i]
 
-        print(f"Finished training {len(nodes)} nodes")
-        print(f"Accuracy: {self.accuracy(X, y)}")
+        if verbose:
+            print(f"Finished training {len(nodes)} nodes")
+            print(f"Accuracy: {self.accuracy(X, y)}")
 
     ''' Can change global tree '''
     def __train_tree(self, X, y):
@@ -182,13 +243,6 @@ class CTao():
             nodes_at_depth = self.__get_nodes_at_depth(self.tree, depth)
             # print(f"ids found at depth {depth}: {[id(node) for node in nodes_at_depth]}")
             self.__train_nodes_parallel(X, y, nodes_at_depth)
-
-    def __reach_node(self, x, node):
-        current_node = self.tree.root
-        while not current_node.is_leaf and current_node != node:
-            decision = np.dot(x, current_node.w) + current_node.b
-            current_node = current_node.left if decision > 0 else current_node.right
-        return current_node == node
 
     ''' Immutable, not edit any class variables, parameters'''
     def __get_nodes_at_depth(self, tree, depth):
@@ -202,10 +256,10 @@ class CTao():
         return self.__get_subnodes_at_depth(node.left, depth) + self.__get_subnodes_at_depth(node.right, depth)
 
 if __name__ == "__main__":
-    ct = CTao(DEPTH=3, D=2, K=5)
+    ct = CTao(DEPTH=10, D=2, K=5)
 
     # generate synthetic data for classification
-    N = 1000
+    N = 2000
     D = 2
     K = 5
 
@@ -217,7 +271,7 @@ if __name__ == "__main__":
     weights = []
     biases = []
 
-    layers = 5
+    layers = 10
 
     # Loop to create 5 layers
     for _ in range(layers):
@@ -235,5 +289,5 @@ if __name__ == "__main__":
 
     ct.fit(X, y)
     acc = ct.accuracy(X, y)
-    print(f"Accuracy: {acc}")
-    ct.plot_training()
+    print('plotting...')
+    ct.plot_training(X, y)
