@@ -1,30 +1,18 @@
+# imports
 from multiprocessing import Pool
 import numpy as np
 import time
-from cTaoTree import CTaoTree
 import cvxpy as cp
 import matplotlib.pyplot as plt
 
+# custom imports
+import node_ops as nops
+import tree_ops as tops
+from tree import CTaoTree
+
+# For future reference
 # D: dimension of data points
 # K: number of classes
-
-def eval(x, node):
-    if node.is_leaf:
-        return node.label, node
-    else:
-        decision = np.dot(x, node.w) + node.b
-        if decision > 0:
-            return eval(x, node.left)
-        else:
-            return eval(x, node.right)
-
-def reach_node(x, root, node):
-    current_node = root
-    while not current_node.is_leaf and current_node != node:
-        decision = np.dot(x, current_node.w) + current_node.b
-        current_node = current_node.left if decision > 0 else current_node.right
-    return current_node == node
-
 
 def find_training_data(X, y, root, node):
     S = []
@@ -39,7 +27,7 @@ def find_training_data(X, y, root, node):
 
     for n in range(N):
         x = X[n]
-        if reach_node(x, root, node):
+        if nops.reach_node(x, root, node):
             S.append(n)
     
     if len(S) == 0:
@@ -53,8 +41,8 @@ def find_training_data(X, y, root, node):
         for n in S:
             x = X[n]
             y_n = y[n]
-            left_label = eval(x, node.left)[0]
-            right_label = eval(x, node.right)[0]
+            left_label =  nops.eval_from(x, node.left)[0]
+            right_label =  nops.eval_from(x, node.right)[0]
 
             if left_label == y_n and right_label == y_n:
                 continue
@@ -67,42 +55,7 @@ def find_training_data(X, y, root, node):
 
         return (node.is_leaf, (X[C], y_bar))
 
-def train_node(is_leaf, train_data):
-    if train_data is None:
-        return None
-    if is_leaf:
-        return train_leaf_node(train_data)
-    else:
-        return train_non_leaf_node(train_data[0], train_data[1])
-    
-# returns new label
-def train_leaf_node(y):
-    unique, counts = np.unique(y, return_counts=True)
-    label = unique[np.argmax(counts)]
-    return label
-
-# returns new w and b
-def train_non_leaf_node(X_C, y_bar):
-    N_C, D = X_C.shape
-
-    if N_C == 0:
-        return None
-
-    y_bar = np.array(y_bar)
-
-    w = cp.Variable((D))
-    b = cp.Variable()
-
-    loss = cp.sum(cp.pos(1 - cp.multiply(y_bar, X_C @ w + b))) / N_C
-    prob = cp.Problem(cp.Minimize(loss))
-    prob.solve(solver=cp.ECOS)
-
-    w = w.value
-    b = b.value
-
-    return w, b
-
-class CTao():
+class BlitzOptimizer():
     def __init__(self, DEPTH, D, K, MAX_ITERS=2):
         self.depth = DEPTH
         self.d = D
@@ -115,21 +68,21 @@ class CTao():
     ''' Mutable Functinon that changes self.tree'''
     def fit(self, X, y):
         self.memory = []
-        self.memory.append((self.tree, self.accuracy(X, y)))
+        self.memory.append((self.tree.copy(), self.accuracy(X, y)))
 
-        N = X.shape[0]
-        shuffle = np.random.permutation(N)
-        breakpoints = np.linspace(0, N, self.iters).astype(int)
-        breakpoints = breakpoints[1:]
+        # N = X.shape[0]
+        # shuffle = np.random.permutation(N)
+        # breakpoints = np.linspace(0, N, self.iters).astype(int)
+        # breakpoints = breakpoints[1:]
 
-        # append N-1 to the end
-        # breakpoints = np.append(breakpoints, N)
-        # TODO: this does not give desired results, need to append to X_batches
+        # # append N-1 to the end
+        # # breakpoints = np.append(breakpoints, N)
+        # # TODO: this does not give desired results, need to append to X_batches
 
-        print(breakpoints)
-        # [ 605 1210]
-        X_batches = np.split(X[shuffle], breakpoints)
-        y_batches = np.split(y[shuffle], breakpoints)
+        # print(breakpoints)
+        # # [ 605 1210]
+        # X_batches = np.split(X[shuffle], breakpoints)
+        # y_batches = np.split(y[shuffle], breakpoints)
 
         # X_batches = np.append(X_batches, X)
         # y_batches = np.append(y_batches, y)
@@ -137,31 +90,15 @@ class CTao():
         for i in range(self.iters):
             print(f"----Training iteration {i+1}----")
             start_time = time.time()
-            print(f"Training on {len(X_batches[i])} data points")
-            self.__train_tree(X_batches[i], y_batches[i])
+            print(f"Training tree with {X.shape[0]} data points")
+            self.__train_tree(X, y)
             end_time = time.time()
             print(f"Accuracy: {self.accuracy(X, y)}")
             print(f"Time taken: {end_time - start_time} seconds")
             self.memory.append((self.tree, self.accuracy(X, y)))
 
-    def eval(self, x, node=None):
-        if node is None:
-            node = self.tree.root
-        
-        if node.is_leaf:
-            return node.label, node
-        else:
-            decision = np.dot(x, node.w) + node.b
-            if decision > 0:
-                return self.eval(x, node.left)
-            else:
-                return self.eval(x, node.right)
-            
-    def batch_eval(self, X):
-        return np.array([self.eval(x)[0] for x in X])
-
     def accuracy(self, X, y):
-        y_pred = self.batch_eval(X)
+        y_pred = tops.batch_eval(X, self.tree)
         return np.mean(y_pred == y)
 
     def plot_training(self, X, y):
@@ -178,7 +115,7 @@ class CTao():
         axs[0].set_title("Ground Truth")
 
         for i, (tree, acc) in enumerate(self.memory):
-            y_pred = tree.batch_eval(X)
+            y_pred = tops.batch_eval(X, tree)
             axs[i+1].scatter(X[:, 0], X[:, 1], c=[colors[y_pred[n]] for n in range(len(X))])
             axs[i+1].set_title(f"Iteration {i}: Accuracy {acc:.2f}")
 
@@ -187,9 +124,6 @@ class CTao():
 
         plt.tight_layout()
         plt.show()
-
-    def print_tree(self):
-        pass
 
     ''' Can change global tree'''
     def __train_nodes_parallel(self, X, y, nodes, verbose=False):
@@ -219,7 +153,7 @@ class CTao():
         
         start_time = time.time()
         with Pool() as pool:
-            result_data = pool.starmap(train_node, train_data)
+            result_data = pool.starmap(nops.find_optimal_params, train_data)
         end_time = time.time()
 
         if verbose:
@@ -240,23 +174,12 @@ class CTao():
     ''' Can change global tree '''
     def __train_tree(self, X, y):
         for depth in reversed(range(self.depth + 1)):
-            nodes_at_depth = self.__get_nodes_at_depth(self.tree, depth)
+            nodes_at_depth = tops.find_nodes_at_depth(self.tree, depth)
             # print(f"ids found at depth {depth}: {[id(node) for node in nodes_at_depth]}")
             self.__train_nodes_parallel(X, y, nodes_at_depth)
 
-    ''' Immutable, not edit any class variables, parameters'''
-    def __get_nodes_at_depth(self, tree, depth):
-        return self.__get_subnodes_at_depth(tree.root, depth)
-
-    def __get_subnodes_at_depth(self, node, depth):
-        if node is None:
-            return []
-        if node.depth == depth:
-            return [node]
-        return self.__get_subnodes_at_depth(node.left, depth) + self.__get_subnodes_at_depth(node.right, depth)
-
 if __name__ == "__main__":
-    ct = CTao(DEPTH=10, D=2, K=5)
+    ct = BlitzOptimizer(DEPTH=10, D=2, K=5)
 
     # generate synthetic data for classification
     N = 2000

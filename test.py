@@ -1,4 +1,4 @@
-from cTao import CTao
+from optimizer import BlitzOptimizer
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
     D = X.shape[1]
 
-    ct = CTao(DEPTH=10, D=X.shape[1], K=2, MAX_ITERS=3)
+    ct = BlitzOptimizer(DEPTH=10, D=X.shape[1], K=2, MAX_ITERS=3)
     ct.fit(X, y)
     print(f"Train Accuracy: {ct.accuracy(X, y)}")
     # ct.plot_training(X, y)
