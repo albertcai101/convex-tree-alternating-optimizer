@@ -9,8 +9,32 @@ def eval (x, tree: CTaoTree):
 def batch_eval (X, tree: CTaoTree):
     return np.array([ nops.eval_from(x, tree.root)[0] for x in X])
 
+def accuracy (X, y, tree: CTaoTree):
+    return np.mean(batch_eval(X, tree) == y)
+
 def find_nodes_at_depth(tree: CTaoTree, depth: int):
     return __find_nodes_at_depth_recursive(tree.root, depth)
+
+# returns string
+# depth 0: returns ['']
+# depth 1: returns ['0', '1']
+# depth 2: returns ['00', '01', '10', '11']
+# ...
+def find_serialized_node_paths_at_depth(depth: int):
+    if depth == 0:
+        return ['']
+    else:
+        prev = find_serialized_node_paths_at_depth(depth - 1)
+        return [path + '0' for path in prev] + [path + '1' for path in prev]
+    
+def deserialize_node_path(node_path: str, tree: CTaoTree):
+    current_node = tree.root
+    for direction in node_path:
+        if direction == '0':
+            current_node = current_node.left
+        else:
+            current_node = current_node.right
+    return current_node
 
 def serialize(tree: CTaoTree):
     weights, biases, leafs =  __serialize_recursive(tree.root, [], [], [])
@@ -85,10 +109,16 @@ def __compare_recursive(node1: StandardNode, node2: StandardNode):
         return False
     return __compare_recursive(node1.left, node2.left) and __compare_recursive(node1.right, node2.right)
 
-# if __name__ == "__main__":
-#     tree = CTaoTree(depth=2, D=2, K=2)
-#     weights, biases, leafs = serialize(tree)
-#     tree2 = deserialize(weights, biases, leafs, 2, 2, 2)
-#     print(tree.to_string(tree.root))
-#     print(tree2.to_string(tree2.root))
-#     print(compare(tree, tree2))
+if __name__ == "__main__":
+    # tree = CTaoTree(depth=2, D=2, K=2)
+    # weights, biases, leafs = serialize(tree)
+    # tree2 = deserialize(weights, biases, leafs, 2, 2, 2)
+    # print(tree.to_string(tree.root))
+    # print(tree2.to_string(tree2.root))
+    # print(compare(tree, tree2))
+
+    print(find_serialized_node_paths_at_depth(2))
+
+    tree = CTaoTree(depth=2, D=2, K=2)
+    print(tree.to_string(tree.root))
+    print(id(deserialize_node_path('1', tree)))

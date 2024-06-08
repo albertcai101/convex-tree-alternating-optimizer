@@ -58,7 +58,9 @@ if __name__ == "__main__":
                     for _ in range(num_computations)]
                 for _ in as_completed(fs):
                     pass
-            # update shared memory
+            # print the result of the computation
+            result = [f.result() for f in fs]
+            print(f"Result: {result}")
             np.copyto(shm_np_array, np_array)
             print(f"Time elapsed for {num_computations} computations: {time.time()-sub_start_time:.2f}s")
     # Check memory usage
