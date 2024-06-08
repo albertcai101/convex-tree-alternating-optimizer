@@ -56,7 +56,7 @@ def find_training_data(X, y, root, node):
         return (node.is_leaf, (X[C], y_bar))
 
 class BlitzOptimizer():
-    def __init__(self, DEPTH, D, K, MAX_ITERS=2):
+    def __init__(self, DEPTH, D, K, MAX_ITERS=2, verbose=False):
         self.depth = DEPTH
         self.d = D
         self.k = K
@@ -64,6 +64,8 @@ class BlitzOptimizer():
 
         self.tree = CTaoTree(self.depth, self.d, self.k)
         self.memory = []
+
+        self.verbose = verbose
 
     ''' Mutable Functinon that changes self.tree'''
     def fit(self, X, y):
@@ -126,7 +128,7 @@ class BlitzOptimizer():
         plt.show()
 
     ''' Can change global tree'''
-    def __train_nodes_parallel(self, X, y, nodes, verbose=False):
+    def __train_nodes_parallel(self, X, y, nodes):
 
         X_sub = X
         y_sub = y
@@ -139,7 +141,7 @@ class BlitzOptimizer():
         #     y_sub = y[subsample]
         #     N = X_sub.shape[0]
 
-        if verbose:
+        if self.verbose:
             print(f"Training {len(nodes)} nodes in parallel...")
             print("first, finding necessary data")
 
@@ -148,7 +150,7 @@ class BlitzOptimizer():
             train_data = pool.starmap(find_training_data, [(X_sub, y_sub, self.tree.root, node) for node in nodes])
         end_time = time.time()
 
-        if verbose:
+        if self.verbose:
             print(f"Train Data Computation Time taken: {end_time - start_time} seconds")
         
         start_time = time.time()
@@ -156,7 +158,7 @@ class BlitzOptimizer():
             result_data = pool.starmap(nops.find_optimal_params, train_data)
         end_time = time.time()
 
-        if verbose:
+        if self.verbose:
             print(f"Actual Traning Time taken: {end_time - start_time} seconds")
 
         for i, node in enumerate(nodes):
@@ -167,19 +169,46 @@ class BlitzOptimizer():
             else:
                 node.w, node.b = result_data[i]
 
-        if verbose:
+        if self.verbose:
             print(f"Finished training {len(nodes)} nodes")
             print(f"Accuracy: {self.accuracy(X, y)}")
+
+    def __train_nodes(self, X, y, nodes):
+        for node in nodes:
+            train_data = find_training_data(X, y, self.tree.root, node)
+            result_data = nops.find_optimal_params(*train_data)
+            if result_data is None:
+                continue
+            if node.is_leaf:
+                node.label = result_data
+            else:
+                node.w, node.b = result_data
 
     ''' Can change global tree '''
     def __train_tree(self, X, y):
         for depth in reversed(range(self.depth + 1)):
             nodes_at_depth = tops.find_nodes_at_depth(self.tree, depth)
             # print(f"ids found at depth {depth}: {[id(node) for node in nodes_at_depth]}")
+            
+            if self.verbose:
+                print(f"Training {len(nodes_at_depth)} nodes at depth {depth}...")
+            
+            start_time = time.time()
             self.__train_nodes_parallel(X, y, nodes_at_depth)
+            end_time = time.time()
+            print(f"Parallel: {end_time - start_time} seconds")
+
+            start_time = time.time()
+            self.__train_nodes(X, y, nodes_at_depth)
+            end_time = time.time()
+            print(f"Sequential: {end_time - start_time} seconds")
+
+            # with 1024 nodes:
+            # Parallel: 3.916908025741577 seconds
+            # Sequential: 4.654406309127808 seconds
 
 if __name__ == "__main__":
-    ct = BlitzOptimizer(DEPTH=10, D=2, K=5)
+    ct = BlitzOptimizer(DEPTH=10, D=2, K=5, verbose=True)
 
     # generate synthetic data for classification
     N = 2000
@@ -210,7 +239,10 @@ if __name__ == "__main__":
     outputs = [X.dot(W) + b for W, b in zip(weights, biases)]
     y = np.argmax(np.maximum.reduce(outputs), axis=1)
 
-    ct.fit(X, y)
-    acc = ct.accuracy(X, y)
-    print('plotting...')
-    ct.plot_training(X, y)
+    # weights, biases, labels = ct.tree.to_numpy()
+    weights, biases, leafs = tops.serialize(ct.tree)
+
+    # ct.fit(X, y)
+    # acc = ct.accuracy(X, y)
+    # print('plotting...')
+    # ct.plot_training(X, y)
