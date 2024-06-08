@@ -22,7 +22,7 @@ from tree import CTaoTree
 # K: number of classes
 
 class BlitzOptimizer():
-    def __init__(self, DEPTH, D, K, MAX_ITERS=2, verbose=False):
+    def __init__(self, DEPTH, D, K, MAX_ITERS=2, shared_memory=True, verbose=False):
         self.depth = DEPTH
         self.d = D
         self.k = K
@@ -31,6 +31,7 @@ class BlitzOptimizer():
         self.tree = CTaoTree(self.depth, self.d, self.k)
         self.memory = []
 
+        self.shared_memory = shared_memory
         self.verbose = verbose
 
     ''' Mutable Functinon that changes self.tree'''
@@ -56,17 +57,27 @@ class BlitzOptimizer():
         # y_batches = np.append(y_batches, y)
 
         for i in range(self.iters):
-            print(f"----Training iteration {i+1}----")
-            start_time = time.time()
-            print(f"Training tree with {X.shape[0]} data points")
+            if self.verbose:
+                print(f"----Training iteration {i+1}----")
+            if self.verbose:
+                print(f"Training tree with {X.shape[0]} data points")
 
-            self.tree = trops.train_tree_shared_memory(X, y, self.tree, verbose=True)
-            # self.tree = trops.train_tree(X, y, self.tree, verbose=True)
+            start_time = time.time()
+
+            if self.shared_memory:
+                self.tree = trops.train_tree_shared_memory(X, y, self.tree, verbose=self.verbose)
+            else:
+                self.tree = trops.train_tree(X, y, self.tree, verbose=self.verbose)
 
             end_time = time.time()
-            print(f"Accuracy: {self.accuracy(X, y)}")
-            print(f"ITERATION Time taken: {end_time - start_time} seconds")
+
+            if self.verbose:
+                print(f"Accuracy: {self.accuracy(X, y)}")
+                print(f"ITERATION Time taken: {end_time - start_time} seconds")
             self.memory.append((self.tree, self.accuracy(X, y)))
+
+    def predict(self, X):
+        return tops.batch_eval(X, self.tree)
 
     def accuracy(self, X, y):
         return tops.accuracy(X, y, self.tree)

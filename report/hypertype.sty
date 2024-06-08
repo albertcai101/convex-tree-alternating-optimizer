@@ -1,0 +1,28 @@
+\usepackage{enumitem,amsmath,amssymb,graphicx, float, subcaption}
+\usepackage{minted, tcolorbox, lineno, etoolbox}
+
+\newcommand {\R}{\mathbb{R}}
+\newcommand {\Z}{\mathbb{Z}}
+\newcommand {\Q}{\mathbb{Q}}
+\newcommand {\N}{\mathbb{N}}
+\newcommand {\E}{\mathbb{E}}
+\newcommand {\toinf}[1]{{#1}\to\infty}
+\newcommand {\Eof}[2]{\E_{#1} \left[ #2 \right]}
+\newcommand {\argmax}[1]{\arg \max_{#1}}
+\newcommand {\argmin}[1]{\arg \min_{#1}}
+\newcommand {\pth}{p_{\theta}}
+\newcommand {\phat}{\hat{p}}
+\newcommand {\fancy}[1]{\mathcal{#1}}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+
+\DeclareMathOperator{\nullspace}{null}
+\DeclareMathOperator{\diag}{diag}
+
+\newminted[mypy]{python}{mathescape, linenos, breaklines, numbersep=1pt,gobble=2}
+\setminted[python]{mathescape, linenos, breaklines, numbersep=1pt,gobble=2}
+
+% Code Appearances
+\BeforeBeginEnvironment{minted}{\begin{tcolorbox}}
+\AfterEndEnvironment{minted}{\end{tcolorbox}}

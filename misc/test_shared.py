@@ -15,6 +15,10 @@ def work_with_shared_memory(shm_name, shape, dtype):
     shm = SharedMemory(shm_name)
     # Create the np.recarray from the buffer of the shared memory
     np_array = np.recarray(shape=shape, dtype=dtype, buf=shm.buf)
+
+    # sleep for 0.0811159610748291 seconds
+    # time.sleep(0.0811159610748291)
+    
     return np.nansum(np_array.val)
 
 
@@ -60,7 +64,7 @@ if __name__ == "__main__":
                     pass
             # print the result of the computation
             result = [f.result() for f in fs]
-            print(f"Result: {result}")
+            # print(f"Result: {result}")
             np.copyto(shm_np_array, np_array)
             print(f"Time elapsed for {num_computations} computations: {time.time()-sub_start_time:.2f}s")
     # Check memory usage

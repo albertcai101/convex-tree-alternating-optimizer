@@ -16,6 +16,13 @@ from tree import CTaoTree
 def train_node(X, y, tree: CTaoTree,  node: StandardNode):
     # print(f"Training node at depth {node.depth}")
 
+    # subsample X and y if too large
+    N = 1000
+    if X.shape[0] > N:
+        idx = np.random.choice(X.shape[0], N, replace=False)
+        X = X[idx]
+        y = y[idx]
+
     if node is None:
         node = tree.root
 
@@ -98,6 +105,9 @@ def train_node(X, y, tree: CTaoTree,  node: StandardNode):
             prob.solve()
 
         return (False, w.value, b.value)
+    
+def train_node_serialized(weights, biases, leafs, node_path):
+    pass
 
 def train_node_shared_memory(shm_name,
                                weights_shape, weights_dtype, weights_offset,
@@ -105,7 +115,12 @@ def train_node_shared_memory(shm_name,
                                leafs_shape, leafs_dtype, leafs_offset,
                                X_shape, X_dtype, X_offset,
                                y_shape, y_dtype, y_offset,
-                               node_path, depth, D, K):
+                               node_path, depth, D, K, verbose=False):
+    start_time = time.time()
+
+    if verbose:
+        print("START TRAIN NODE SHARED MEMORY")
+
     shm = SharedMemory(shm_name)
     weights = np.ndarray(weights_shape, dtype=weights_dtype, buffer=shm.buf, offset=weights_offset)
     biases = np.ndarray(biases_shape, dtype=biases_dtype, buffer=shm.buf, offset=biases_offset)
@@ -113,10 +128,27 @@ def train_node_shared_memory(shm_name,
     X = np.ndarray(X_shape, dtype=X_dtype, buffer=shm.buf, offset=X_offset)
     y = np.ndarray(y_shape, dtype=y_dtype, buffer=shm.buf, offset=y_offset)
 
+    mid_time = time.time()
+
+    if verbose:
+        print(f"Time taken to get shared memory: {mid_time - start_time} seconds")
+    
+
     tree = tops.deserialize(weights, biases, leafs, depth, D, K)
+
     node = tops.deserialize_node_path(node_path, tree)
 
+    mid_time = time.time()
+
+    if verbose:
+        print(f"Time taken to deserialize tree and node: {mid_time - start_time} seconds")
+
     result = train_node(X, y, tree, node)
+
+    if verbose:
+        print(f"Time taken to train node: {time.time() - mid_time} seconds")
+        print("END TRAIN NODE SHARED MEMORY")
+
     return result
 
 def train_tree(X, y, tree: CTaoTree, verbose=False):
@@ -154,6 +186,13 @@ def train_tree(X, y, tree: CTaoTree, verbose=False):
 def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
     tree = tree.copy()
 
+    # subsample X and y if too large
+    N = 1
+    if X.shape[0] > N:
+        idx = np.random.choice(X.shape[0], N, replace=False)
+        X = X[idx]
+        y = y[idx]
+
     weights, biases, leafs = tops.serialize(tree)
     total_bytes = weights.nbytes + biases.nbytes + leafs.nbytes + X.nbytes + y.nbytes
     offset_weights = 0
@@ -187,6 +226,7 @@ def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
                 print(f"Training {len(serialized_node_paths_at_depth)} nodes at depth {depth}...")
 
             start_time = time.time()
+
             with ProcessPoolExecutor(cpu_count()) as exe:
                 fs = [exe.submit(train_node_shared_memory, shm.name,
                                     weights.shape, weights.dtype, offset_weights,
@@ -194,12 +234,21 @@ def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
                                     leafs.shape, leafs.dtype, offset_leafs,
                                     X.shape, X.dtype, offset_X,
                                     y.shape, y.dtype, offset_y,
-                                    serialized_node_path, tree.depth, tree.D, tree.K)
+                                    serialized_node_path, tree.depth, tree.D, tree.K, verbose=verbose)
                         for serialized_node_path in serialized_node_paths_at_depth]
                 for _ in as_completed(fs):
                     pass
+
+            mid_time = time.time()
+            if verbose:
+                print(f"Time taken to submit tasks: {mid_time - start_time} seconds")
+
             results = [f.result() for f in fs]
-            
+            if verbose:
+                print(f"Time taken to get results: {time.time() - mid_time} seconds")
+
+            mid_time = time.time()
+
             for serialized_node_path, result in zip(serialized_node_paths_at_depth, results):
                 is_leaf = result[0]
 
@@ -215,7 +264,11 @@ def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
                         node.w = w
                     if b is not None:
                         node.b = b
+            if verbose:
+                print(f"Time taken to update tree: {time.time() - mid_time} seconds")
+
             end_time = time.time()
+
             if verbose:
                 print(f"Time taken: {end_time - start_time} seconds")
 
