@@ -1,6 +1,6 @@
 import numpy as np
 import cvxpy as cp
-from node import StandardNode
+from strucs.node import StandardNode
 
 def eval_from(x, node: StandardNode):
     if node.is_leaf:

@@ -12,10 +12,10 @@ import cvxpy as cp
 import matplotlib.pyplot as plt
 
 # custom imports
-import node_ops as nops
-import tree_ops as tops
-import train_ops as trops
-from tree import CTaoTree
+import operations.node_ops as nops
+import operations.tree_ops as tops
+import operations.train_ops as trops
+from strucs.tree import CTaoTree
 
 # For future reference
 # D: dimension of data points

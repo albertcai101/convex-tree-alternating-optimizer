@@ -1,5 +1,5 @@
-from tree import CTaoTree
-from tree_ops import batch_eval
+from strucs.tree import CTaoTree
+from operations.tree_ops import batch_eval
 import numpy as np
 import time
 

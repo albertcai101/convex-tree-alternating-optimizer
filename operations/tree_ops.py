@@ -1,7 +1,7 @@
 import numpy as np
-from node import StandardNode
-import node_ops as nops
-from tree import CTaoTree
+from strucs.node import StandardNode
+import operations.node_ops as nops
+from strucs.tree import CTaoTree
 
 def eval (x, tree: CTaoTree):
     return nops.eval_from(x, tree.root)[0]

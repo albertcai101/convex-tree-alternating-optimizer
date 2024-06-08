@@ -8,10 +8,10 @@ import time
 import warnings
 import numpy as np
 import cvxpy as cp
-from node import StandardNode
-import node_ops as nops
-import tree_ops as tops
-from tree import CTaoTree
+from strucs.node import StandardNode
+import operations.node_ops as nops
+import operations.tree_ops as tops
+from strucs.tree import CTaoTree
 
 def train_node(X, y, tree: CTaoTree,  node: StandardNode):
     # print(f"Training node at depth {node.depth}")

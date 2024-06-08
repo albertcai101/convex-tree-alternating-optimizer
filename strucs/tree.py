@@ -1,7 +1,7 @@
 import numpy as np
 import cvxpy as cp
 from dask import delayed, compute, visualize
-from node import LeafNode, StandardNode
+from strucs.node import LeafNode, StandardNode
 
 # D: dimension of data points
 # K: number of classes
