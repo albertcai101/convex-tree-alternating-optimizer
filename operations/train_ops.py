@@ -134,7 +134,7 @@ def train_node_shared_memory(shm_name,
         print(f"Time taken to get shared memory: {mid_time - start_time} seconds")
     
 
-    tree = tops.deserialize(weights, biases, leafs, depth, D, K)
+    tree = tops.deserialize(weights, biases, leafs, depth, D, K) # TODO: THIS TAKES THE MOST TIME BY 2 ORDERS OF MAGNITUDE, NEED TO FIX
 
     node = tops.deserialize_node_path(node_path, tree)
 

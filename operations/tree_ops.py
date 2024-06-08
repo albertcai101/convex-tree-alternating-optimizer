@@ -110,15 +110,13 @@ def __compare_recursive(node1: StandardNode, node2: StandardNode):
     return __compare_recursive(node1.left, node2.left) and __compare_recursive(node1.right, node2.right)
 
 if __name__ == "__main__":
-    # tree = CTaoTree(depth=2, D=2, K=2)
-    # weights, biases, leafs = serialize(tree)
-    # tree2 = deserialize(weights, biases, leafs, 2, 2, 2)
-    # print(tree.to_string(tree.root))
-    # print(tree2.to_string(tree2.root))
-    # print(compare(tree, tree2))
-
-    print(find_serialized_node_paths_at_depth(2))
-
-    tree = CTaoTree(depth=2, D=2, K=2)
+    tree = CTaoTree(depth=3, D=2, K=2)
+    weights, biases, leafs = serialize(tree)
     print(tree.to_string(tree.root))
-    print(id(deserialize_node_path('1', tree)))
+    print(weights)
+
+    # print(find_serialized_node_paths_at_depth(2))
+
+    # tree = CTaoTree(depth=2, D=2, K=2)
+    # print(tree.to_string(tree.root))
+    # print(id(deserialize_node_path('1', tree)))
