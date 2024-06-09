@@ -6,7 +6,7 @@ import dataloader as loader
 
 
 if __name__ == "__main__":
-    X_train, y_train, X_test, y_test, X_valid, y_valid = loader.load_bace()
+    X_train, y_train, X_test, y_test, X_valid, y_valid = loader.load_sider()
     D = X_train.shape[1]
 
     print("X_train shape: ", X_train.shape)
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     print(f"XGBoost Validation AUC: {roc_auc_score(y_valid, y_valid_pred)}")
 
     # Blitz
-    ct = BlitzOptimizer(DEPTH=5, D=D, K=2, MAX_ITERS=1, shared_memory=True, verbose=True)
+    ct = BlitzOptimizer(DEPTH=10, D=D, K=2, MAX_ITERS=1, verbose=True)
     ct.fit(X_train, y_train)
     y_train_resid = y_train - ct.predict(X_train)
 

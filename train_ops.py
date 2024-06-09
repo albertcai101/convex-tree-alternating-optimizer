@@ -13,94 +13,95 @@ import node_ops as nops
 import tree_ops as tops
 import serial_ops as sops
 from tree import CTaoTree
+import dask
 
-def train_node(X, y, tree: CTaoTree,  node: StandardNode):
-    # print(f"Training node at depth {node.depth}")
+# def train_node(X, y, tree: CTaoTree,  node: StandardNode):
+#     # print(f"Training node at depth {node.depth}")
 
-    if node is None:
-        node = tree.root
+#     if node is None:
+#         node = tree.root
 
-    if node.is_leaf:
-        # if node is leaf, update the label to the most frequent class
-        # print(f"Now training leaf node at depth {node.depth}")
+#     if node.is_leaf:
+#         # if node is leaf, update the label to the most frequent class
+#         # print(f"Now training leaf node at depth {node.depth}")
 
-        # find the most frequent class
+#         # find the most frequent class
 
-        # first find all the elements that reach the node
-        S = []
-        N = X.shape[0]
-        for n in range(N):
-            x = X[n]
-            if nops.reach_node(x, tree.root, node):
-                S.append(n)
+#         # first find all the elements that reach the node
+#         S = []
+#         N = X.shape[0]
+#         for n in range(N):
+#             x = X[n]
+#             if nops.reach_node(x, tree.root, node):
+#                 S.append(n)
         
-        if len(S) == 0:
-            # print(f"No data points reached leaf node at depth {node.depth}")
-            return (True, None)
+#         if len(S) == 0:
+#             # print(f"No data points reached leaf node at depth {node.depth}")
+#             return (True, None)
         
-        # set the label to the most frequent class
-        y_S = y[S]
-        unique, counts = np.unique(y_S, return_counts=True)
-        return (True, unique[np.argmax(counts)])
+#         # set the label to the most frequent class
+#         y_S = y[S]
+#         unique, counts = np.unique(y_S, return_counts=True)
+#         return (True, unique[np.argmax(counts)])
 
-        # print(f"Trained leaf node at depth {node.depth} to label {node.label}")
-    else:
-        # if node is not leaf, find the best split
+#         # print(f"Trained leaf node at depth {node.depth} to label {node.label}")
+#     else:
+#         # if node is not leaf, find the best split
 
-        # find subset S of data points that reach node using reach_node
-        S = []
-        N = X.shape[0]
-        for n in range(N):
-            x = X[n]
-            if nops.reach_node(x, tree.root, node):
-                S.append(n)
+#         # find subset S of data points that reach node using reach_node
+#         S = []
+#         N = X.shape[0]
+#         for n in range(N):
+#             x = X[n]
+#             if nops.reach_node(x, tree.root, node):
+#                 S.append(n)
 
-        # print(f"Reached {len(S)} data points at depth {node.depth}")
+#         # print(f"Reached {len(S)} data points at depth {node.depth}")
         
-        # find of subset C that we care: changing left or right will change the label
-        C = []
-        y_bar = []
-        for n in S:
-            x = X[n]
-            y_n = y[n]
-            left_label = nops.eval_from(x, node.left)[0]
-            right_label = nops.eval_from(x, node.right)[0]
+#         # find of subset C that we care: changing left or right will change the label
+#         C = []
+#         y_bar = []
+#         for n in S:
+#             x = X[n]
+#             y_n = y[n]
+#             left_label = nops.eval_from(x, node.left)[0]
+#             right_label = nops.eval_from(x, node.right)[0]
 
-            # if both are correct, we don't care
-            if left_label == y_n and right_label == y_n:
-                continue
+#             # if both are correct, we don't care
+#             if left_label == y_n and right_label == y_n:
+#                 continue
 
-            # if both are wrong, we don't care
-            if left_label != y_n and right_label != y_n:
-                continue
+#             # if both are wrong, we don't care
+#             if left_label != y_n and right_label != y_n:
+#                 continue
 
-            # if one is correct and the other is wrong, we care
-            C.append(n)
-            y_bar.append(1 if left_label == y_n else -1)
+#             # if one is correct and the other is wrong, we care
+#             C.append(n)
+#             y_bar.append(1 if left_label == y_n else -1)
 
-        # print(f"Found {len(C)} data points at depth {node.depth} that we care about")
+#         # print(f"Found {len(C)} data points at depth {node.depth} that we care about")
 
-        # find the best split that minimizes the loss using cvxpy
-        X_C = X[C]
-        y_C = np.array(y_bar)
-        N_C = len(C)
+#         # find the best split that minimizes the loss using cvxpy
+#         X_C = X[C]
+#         y_C = np.array(y_bar)
+#         N_C = len(C)
 
-        if N_C == 0:
-            # print(f"No data points to care node at depth {node.depth}, skipping training node")
-            return (False, None, None)
+#         if N_C == 0:
+#             # print(f"No data points to care node at depth {node.depth}, skipping training node")
+#             return (False, None, None)
         
-        w = cp.Variable((X.shape[1]))
-        b = cp.Variable()
+#         w = cp.Variable((X.shape[1]))
+#         b = cp.Variable()
 
-        loss = cp.sum(cp.pos(1 - cp.multiply(y_C, X_C @ w + b))) / N_C
-        prob = cp.Problem(cp.Minimize(loss))
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore")
-            prob.solve()
+#         loss = cp.sum(cp.pos(1 - cp.multiply(y_C, X_C @ w + b))) / N_C
+#         prob = cp.Problem(cp.Minimize(loss))
+#         with warnings.catch_warnings():
+#             warnings.filterwarnings("ignore")
+#             prob.solve()
 
-        return (False, w.value, b.value)
+#         return (False, w.value, b.value)
 
-def train_node_serialized(X, y, weights, biases, leafs, node_path, depth):
+def train_node_serialized(X, y, weights, biases, leafs, node_path, reach_node_indices, depth):
     if node_path == None:
         node_path = ''
 
@@ -109,15 +110,9 @@ def train_node_serialized(X, y, weights, biases, leafs, node_path, depth):
     if len(node_path) == depth:
         # Leaf Node
 
-        # find the most frequent class
+        S = reach_node_indices
 
-        # first find all the elements that reach the node
-        S = []
-        N = X.shape[0]
-        for n in range(N):
-            x = X[n]
-            if sops.reach_node(x, weights, biases, 0, node_index, depth):
-                S.append(n)
+        # print(f"Time to find Leaf Node S: {end_time - start_time} seconds") # 0.07 - 0.11 seconds, so this is the bottleneck
 
         if len(S) == 0:
             return (True, None)
@@ -129,14 +124,12 @@ def train_node_serialized(X, y, weights, biases, leafs, node_path, depth):
     
     else:
         # Internal Node
-
-        # find subset S of data points that reach node using reach_node
-        S = []
-        N = X.shape[0]
-        for n in range(N):
-            x = X[n]
-            if sops.reach_node(x, weights, biases, 0, node_index, depth):
-                S.append(n)
+        S = reach_node_indices
+        # N = X.shape[0]
+        # for n in range(N):
+        #     x = X[n]
+        #     if sops.reach_node(x, weights, biases, 0, node_index, depth):
+        #         S.append(n)
 
         # find of subset C that we care: changing left or right will change the label
         C = []
@@ -185,7 +178,8 @@ def train_node_shared_memory(shm_name,
                                leafs_shape, leafs_dtype, leafs_offset,
                                X_shape, X_dtype, X_offset,
                                y_shape, y_dtype, y_offset,
-                               node_path, depth, D, K):
+                               node_path, reach_node_indices, depth):
+    
     shm = SharedMemory(shm_name)
     weights = np.ndarray(weights_shape, dtype=weights_dtype, buffer=shm.buf, offset=weights_offset)
     biases = np.ndarray(biases_shape, dtype=biases_dtype, buffer=shm.buf, offset=biases_offset)
@@ -197,41 +191,44 @@ def train_node_shared_memory(shm_name,
     # node = sops.deserialize_node_path(node_path, tree)
     # result = train_node(X, y, tree, node)
 
-    result = train_node_serialized(X, y, weights, biases, leafs, node_path, depth)
+    # start_time = time.time()
+    result = train_node_serialized(X, y, weights, biases, leafs, node_path, reach_node_indices, depth) # 0.07 - 0.11 seconds
+    # end_time = time.time()
+    # print(f"In shared memory, time taken to train node: {end_time - start_time} seconds")
 
     return result
 
-def train_tree(X, y, tree: CTaoTree, verbose=False):
-    tree = tree.copy()
+# def train_tree(X, y, tree: CTaoTree, verbose=False):
+#     tree = tree.copy()
 
-    for depth in reversed(range(tree.depth + 1)):
-        nodes_at_depth = tops.find_nodes_at_depth(tree, depth)
+#     for depth in reversed(range(tree.depth + 1)):
+#         nodes_at_depth = tops.find_nodes_at_depth(tree, depth)
 
-        if verbose:
-            print(f"Training {len(nodes_at_depth)} nodes at depth {depth}...")
+#         if verbose:
+#             print(f"Training {len(nodes_at_depth)} nodes at depth {depth}...")
 
-        start_time = time.time()
-        with Pool(cpu_count()) as p:
-            results = p.starmap(train_node, [(X, y, tree, node) for node in nodes_at_depth])
-        for node, result in zip(nodes_at_depth, results):
-            is_leaf = result[0]
+#         start_time = time.time()
+#         with Pool(cpu_count()) as p:
+#             results = p.starmap(train_node, [(X, y, tree, node) for node in nodes_at_depth])
+#         for node, result in zip(nodes_at_depth, results):
+#             is_leaf = result[0]
 
-            if is_leaf:
-                leaf_label = result[1]
-                if leaf_label is not None:
-                    node.label = leaf_label
-            else:
-                w = result[1]
-                b = result[2]
-                if w is not None:
-                    node.w = w
-                if b is not None:
-                    node.b = b
-        end_time = time.time()
-        if verbose:
-            print(f"Time taken: {end_time - start_time} seconds")
+#             if is_leaf:
+#                 leaf_label = result[1]
+#                 if leaf_label is not None:
+#                     node.label = leaf_label
+#             else:
+#                 w = result[1]
+#                 b = result[2]
+#                 if w is not None:
+#                     node.w = w
+#                 if b is not None:
+#                     node.b = b
+#         end_time = time.time()
+#         if verbose:
+#             print(f"Time taken: {end_time - start_time} seconds")
 
-    return tree
+#     return tree
 
 def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
     tree = tree.copy()
@@ -265,6 +262,15 @@ def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
 
             serialized_node_paths_at_depth = sops.find_serialized_node_paths_at_depth(depth)
 
+            # start_time = time.time()
+            reach_node_batch = sops.reach_node_batch(X, weights, biases, serialized_node_paths_at_depth, depth) # 0.15 seconds
+            # mid_time = time.time()
+            # print(f"Time taken to batch reach nodes: {mid_time - start_time} seconds")
+
+            # convert this matrix of size N x num_nodes to a list of size num_nodes where each element is a list of the nonzero indices
+            reach_node_indices_list = [np.nonzero(reach_node_batch[:, i])[0] for i in range(reach_node_batch.shape[1])]
+            # print(reach_node_indices)
+
             if verbose:
                 print(f"Training {len(serialized_node_paths_at_depth)} nodes at depth {depth}...")
 
@@ -276,11 +282,19 @@ def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
                                     leafs.shape, leafs.dtype, offset_leafs,
                                     X.shape, X.dtype, offset_X,
                                     y.shape, y.dtype, offset_y,
-                                    serialized_node_path, tree.depth, tree.D, tree.K)
-                        for serialized_node_path in serialized_node_paths_at_depth]
+                                    serialized_node_path, reach_node_indices, tree.depth)
+                        for serialized_node_path, reach_node_indices in zip(serialized_node_paths_at_depth, reach_node_indices_list)]
                 for _ in as_completed(fs):
                     pass
+            mid_time = time.time()
+
+            if verbose:
+                print(f"Time taken to train nodes: {mid_time - start_time} seconds")
+
             results = [f.result() for f in fs]
+
+            if verbose:
+                print(f"Time taken to get results: {time.time() - mid_time} seconds")
             
             for serialized_node_path, result in zip(serialized_node_paths_at_depth, results):
                 is_leaf = result[0]
@@ -298,6 +312,7 @@ def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
                     if b is not None:
                         node.b = b
             end_time = time.time()
+
             if verbose:
                 print(f"Time taken: {end_time - start_time} seconds")
 

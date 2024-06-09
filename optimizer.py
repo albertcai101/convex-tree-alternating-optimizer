@@ -22,7 +22,7 @@ from tree import CTaoTree
 # K: number of classes
 
 class BlitzOptimizer():
-    def __init__(self, DEPTH, D, K, MAX_ITERS=2, shared_memory=True, verbose=False):
+    def __init__(self, DEPTH, D, K, MAX_ITERS=2, verbose=False):
         self.depth = DEPTH
         self.d = D
         self.k = K
@@ -31,7 +31,6 @@ class BlitzOptimizer():
         self.tree = CTaoTree(self.depth, self.d, self.k)
         self.memory = []
 
-        self.shared_memory = shared_memory
         self.verbose = verbose
 
     ''' Mutable Functinon that changes self.tree'''
@@ -64,10 +63,10 @@ class BlitzOptimizer():
 
             start_time = time.time()
 
-            if self.shared_memory:
-                self.tree = trops.train_tree_shared_memory(X, y, self.tree, verbose=self.verbose)
-            else:
-                self.tree = trops.train_tree(X, y, self.tree, verbose=self.verbose)
+            # if self.shared_memory:
+            self.tree = trops.train_tree_shared_memory(X, y, self.tree, verbose=self.verbose)
+            # else:
+            #     self.tree = trops.train_tree(X, y, self.tree, verbose=self.verbose)
 
             end_time = time.time()
 
@@ -107,7 +106,7 @@ class BlitzOptimizer():
         plt.show()
 
 if __name__ == "__main__":
-    ct = BlitzOptimizer(DEPTH=10, D=2, K=5, shared_memory=True, verbose=True)
+    ct = BlitzOptimizer(DEPTH=10, D=2, K=5, verbose=True)
 
     # generate synthetic data for classification
     N = 2000

@@ -1,3 +1,4 @@
+import time
 import numpy as np
 
 from node import StandardNode
@@ -66,13 +67,59 @@ def is_leaf(index: int, depth: int):
     return len(path) == depth
 
 def reach_node(x, weights, biases, root_index: int, node_index: int, depth: int):
+    # start_time = time.time()
     current_index = root_index
     while not is_leaf(current_index, depth) and current_index != node_index:
+        # start_time = time.time()
         weight = get_weight_from_index(current_index, weights, depth)
+        # middle_time = time.time()
+        # print(f"Timer for get_weight_from_index: {middle_time - start_time}") # 4e-6
+
         bias = get_bias_from_index(current_index, biases, depth)
+        # middle_2_time = time.time()
+        # print(f"Timer for get_bias_from_index: {middle_2_time - middle_time}") # 2e-6 - 5e-6
+
         decision = np.dot(x, weight) + bias
+        # middle_3_time = time.time()
+        # print(f"Timer for np.dot: {middle_3_time - middle_2_time}") # 1e-5
+
         current_index = get_left_child_index(current_index, depth) if decision > 0 else get_right_child_index(current_index, depth)
+        # middle_4_time = time.time()
+        # print(f"Timer for get_left_child_index: {time.time() - middle_3_time}") # 5e-6
+
+        is_a_leaf = is_leaf(current_index, depth)
+        # print(f"Timer for is_leaf: {time.time() - middle_4_time}") # 4e-6
+
+    # end_time = time.time()
+    # print(f"Timer for reach_node: {end_time - start_time}")
     return current_index == node_index
+
+def reach_node_batch(X, weights, biases, node_paths, depth: int):
+    # list of len node_indexes that will hold the n where X[n] reaches the node
+    # print('dimensions: ', X.shape[0], len(node_paths))
+    result = np.zeros((X.shape[0], len(node_paths)))
+
+    # maximum node_path length
+    max_path_length = max([len(path) for path in node_paths])
+
+    for i in range(X.shape[0]):
+        x = X[i]
+        path = ''
+        while (len(path) <= max_path_length) and len(path) <= depth:
+            if path in node_paths:
+                result[i, node_paths.index(path)] = 1
+
+            if len(path) == depth:
+                break
+
+            # advance
+            weight = get_weight_from_index(get_index_from_serialized_path(path, depth), weights, depth)
+            bias = get_bias_from_index(get_index_from_serialized_path(path, depth), biases, depth)
+            decision = np.dot(x, weight) + bias
+            path += '0' if decision > 0 else '1'
+    return result
+
+        
 
 def eval_from(x, weights, biases, leafs, root_index: int, depth: int):
     current_index = root_index
