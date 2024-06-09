@@ -25,8 +25,9 @@ if __name__ == "__main__":
     print(f"XGBoost Validation AUC: {roc_auc_score(y_valid, y_valid_pred)}")
 
     # Blitz
-    ct = BlitzOptimizer(DEPTH=10, D=D, K=2, MAX_ITERS=3, shared_memory=True, verbose=True)
+    ct = BlitzOptimizer(DEPTH=5, D=D, K=2, MAX_ITERS=1, shared_memory=True, verbose=True)
     ct.fit(X_train, y_train)
+    y_train_resid = y_train - ct.predict(X_train)
 
     y_test_pred = ct.predict(X_test)
     print(f"Blitz Test Accuracy: {np.mean(y_test_pred == y_test)}")

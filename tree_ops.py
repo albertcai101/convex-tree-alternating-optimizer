@@ -25,6 +25,7 @@ def __find_nodes_at_depth_recursive(node: StandardNode, depth):
         return [node]
     return __find_nodes_at_depth_recursive(node.left, depth) + __find_nodes_at_depth_recursive(node.right, depth)
 
+
 def __compare_recursive(node1: StandardNode, node2: StandardNode):
     if node1 is None and node2 is None:
         return True
