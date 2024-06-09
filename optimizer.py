@@ -107,7 +107,7 @@ class BlitzOptimizer():
         plt.show()
 
 if __name__ == "__main__":
-    ct = BlitzOptimizer(DEPTH=10, D=2, K=5, verbose=True)
+    ct = BlitzOptimizer(DEPTH=10, D=2, K=5, shared_memory=True, verbose=True)
 
     # generate synthetic data for classification
     N = 2000

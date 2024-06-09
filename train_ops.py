@@ -11,6 +11,7 @@ import cvxpy as cp
 from node import StandardNode
 import node_ops as nops
 import tree_ops as tops
+import serialize_ops as sops
 from tree import CTaoTree
 
 def train_node(X, y, tree: CTaoTree,  node: StandardNode):
@@ -106,8 +107,85 @@ def train_node(X, y, tree: CTaoTree,  node: StandardNode):
 
         return (False, w.value, b.value)
     
-def train_node_serialized(weights, biases, leafs, node_path):
-    pass
+def train_node_serialized(X, y, weights, biases, leafs, node_path, depth):
+    if node_path == None:
+        node_path = ''
+
+    node_index = sops.get_index_from_serialized_path(node_path, depth)
+
+    if len(node_path) == depth:
+        # Leaf Node
+
+        # find the most frequent class
+
+        # first find all the elements that reach the node
+        S = []
+        N = X.shape[0]
+        for n in range(N):
+            x = X[n]
+            if sops.reach_node(x, weights, biases, 0, node_index, depth):
+                S.append(n)
+
+        if len(S) == 0:
+            return (True, None)
+        
+        # set the label to the most frequent class
+        y_S = y[S]
+        unique, counts = np.unique(y_S, return_counts=True)
+        return (True, unique[np.argmax(counts)])
+    
+    else:
+        # Internal Node
+
+        # find subset S of data points that reach node using reach_node
+        S = []
+        N = X.shape[0]
+        for n in range(N):
+            x = X[n]
+            if sops.reach_node(x, weights, biases, 0, node_index, depth):
+                S.append(n)
+
+        # find of subset C that we care: changing left or right will change the label
+        C = []
+        y_bar = []
+        for n in S:
+            x = X[n]
+            y_n = y[n]
+            left_label = sops.eval_from(x, weights, biases, leafs, sops.get_left_child_index(node_index, depth), depth)
+            right_label = sops.eval_from(x, weights, biases, leafs, sops.get_right_child_index(node_index, depth), depth)
+
+            # if both are correct, we don't care
+            if left_label == y_n and right_label == y_n:
+                continue
+
+            # if both are wrong, we don't care
+            if left_label != y_n and right_label != y_n:
+                continue
+
+            # if one is correct and the other is wrong, we care
+            C.append(n)
+            y_bar.append(1 if left_label == y_n else -1)
+
+        # find the best split that minimizes the loss using cvxpy
+        X_C = X[C]
+        y_C = np.array(y_bar)
+        N_C = len(C)
+
+        if N_C == 0:
+            return (False, None, None)
+        
+        w = cp.Variable((X.shape[1]))
+        b = cp.Variable()
+
+        loss = cp.sum(cp.pos(1 - cp.multiply(y_C, X_C @ w + b))) / N_C
+        prob = cp.Problem(cp.Minimize(loss))
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            prob.solve()
+
+        return (False, w.value, b.value)
+
 
 def train_node_shared_memory(shm_name,
                                weights_shape, weights_dtype, weights_offset,
@@ -118,8 +196,8 @@ def train_node_shared_memory(shm_name,
                                node_path, depth, D, K, verbose=False):
     start_time = time.time()
 
-    if verbose:
-        print("START TRAIN NODE SHARED MEMORY")
+    # if verbose:
+    #     print("START TRAIN NODE SHARED MEMORY")
 
     shm = SharedMemory(shm_name)
     weights = np.ndarray(weights_shape, dtype=weights_dtype, buffer=shm.buf, offset=weights_offset)
@@ -128,28 +206,34 @@ def train_node_shared_memory(shm_name,
     X = np.ndarray(X_shape, dtype=X_dtype, buffer=shm.buf, offset=X_offset)
     y = np.ndarray(y_shape, dtype=y_dtype, buffer=shm.buf, offset=y_offset)
 
-    mid_time = time.time()
+    # mid_time = time.time()
 
-    if verbose:
-        print(f"Time taken to get shared memory: {mid_time - start_time} seconds")
+    # if verbose:
+    #     print(f"Time taken to get shared memory: {mid_time - start_time} seconds")
     
 
-    tree = tops.deserialize(weights, biases, leafs, depth, D, K)
+    tree = sops.deserialize(weights, biases, leafs, depth, D, K)
+    node = sops.deserialize_node_path(node_path, tree)
 
-    node = tops.deserialize_node_path(node_path, tree)
+    # mid_time = time.time()
 
-    mid_time = time.time()
+    # if verbose:
+    #     print(f"Time taken to deserialize tree and node: {mid_time - start_time} seconds")
 
-    if verbose:
-        print(f"Time taken to deserialize tree and node: {mid_time - start_time} seconds")
+    result_old = train_node(X, y, tree, node)
 
-    result = train_node(X, y, tree, node)
+    # result_new = train_node_serialized(X, y, weights, biases, leafs, node_path, depth)
 
-    if verbose:
-        print(f"Time taken to train node: {time.time() - mid_time} seconds")
-        print("END TRAIN NODE SHARED MEMORY")
+    # if np.any(result_old[1] != result_new[1]):
+    #     print('result mismatch')
+    #     print('old: ', result_old)
+    #     print('new: ', result_new)
 
-    return result
+    # if verbose:
+    #     print(f"Time taken to train node: {time.time() - mid_time} seconds")
+    #     print("END TRAIN NODE SHARED MEMORY")
+
+    return result_old
 
 def train_tree(X, y, tree: CTaoTree, verbose=False):
     tree = tree.copy()
@@ -193,7 +277,7 @@ def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
         X = X[idx]
         y = y[idx]
 
-    weights, biases, leafs = tops.serialize(tree)
+    weights, biases, leafs = sops.serialize(tree)
     total_bytes = weights.nbytes + biases.nbytes + leafs.nbytes + X.nbytes + y.nbytes
     offset_weights = 0
     offset_biases = offset_weights + weights.nbytes
@@ -220,7 +304,7 @@ def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
         for depth in reversed(range(tree.depth + 1)):
             # nodes_at_depth = tops.find_nodes_at_depth(tree, depth)
 
-            serialized_node_paths_at_depth = tops.find_serialized_node_paths_at_depth(depth)
+            serialized_node_paths_at_depth = sops.find_serialized_node_paths_at_depth(depth)
 
             if verbose:
                 print(f"Training {len(serialized_node_paths_at_depth)} nodes at depth {depth}...")
@@ -252,7 +336,7 @@ def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
             for serialized_node_path, result in zip(serialized_node_paths_at_depth, results):
                 is_leaf = result[0]
 
-                node = tops.deserialize_node_path(serialized_node_path, tree)
+                node = sops.deserialize_node_path(serialized_node_path, tree)
                 if is_leaf:
                     leaf_label = result[1]
                     if leaf_label is not None:
@@ -273,7 +357,7 @@ def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
                 print(f"Time taken: {end_time - start_time} seconds")
 
             # update weights, biases, leafs
-            weights, biases, leafs = tops.serialize(tree)
+            weights, biases, leafs = sops.serialize(tree)
 
             # update shared memory
             np.copyto(shm_weights, weights)
@@ -281,19 +365,3 @@ def train_tree_shared_memory(X, y, tree: CTaoTree, verbose=False):
             np.copyto(shm_leafs, leafs)
 
     return tree
-
-
-if __name__ == "__main__":
-    tree = CTaoTree(2, 10, 2)
-    X = np.random.randn(100, 10)
-    y = np.random.randint(0, 2, 100)
-
-    print("Original tree:")
-    print(tree.to_string(tree.root))
-    print("accuracy:", tops.accuracy(X, y, tree))
-
-    tree = train_tree_shared_memory(tree, X, y, verbose=True)
-    print("Trained tree:")
-    print(tree.to_string(tree.root))
-    print("accuracy:", tops.accuracy(X, y, tree))
-
